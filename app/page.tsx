@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   GraduationCap, Send, Loader2, Star, Target, Clock, LogOut, X, Sparkles, 
   CheckCircle2, Zap, User, Settings, Save, Menu, FileText, LayoutDashboard, 
-  Activity, Globe, Camera, ArrowRight, Heart, Bot, Lock
+  Activity, Globe, Camera, ArrowRight, Heart, Bot, Lock, Mail
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -103,10 +103,10 @@ const AIBuddy = ({ activeTab, isTyping }: { activeTab: string, isTyping: boolean
             <motion.div animate={{ backgroundColor: isTyping ? "#f97316" : "#4ade80" }} className="absolute -top-1.5 -left-0.5 w-2 h-2 rounded-full shadow-[0_0_10px_orange]" />
           </div>
           <div className="w-16 h-14 rounded-[22px] bg-zinc-900 border-2 border-zinc-800 border-b-4 border-b-black flex flex-col items-center justify-center relative shadow-2xl transition-all duration-500">
-             <div className="flex gap-2.5">
+              <div className="flex gap-2.5">
                 <motion.div animate={status === "sleeping" ? { height: 2 } : status === "thinking" ? { height: [5, 2, 5] } : { height: 5 }} className="w-2.5 rounded-full bg-orange-400" />
                 <motion.div animate={status === "sleeping" ? { height: 2 } : status === "thinking" ? { height: [5, 2, 5] } : { height: 5 }} className="w-2.5 rounded-full bg-orange-400" />
-             </div>
+              </div>
           </div>
           <motion.div animate={status === "waving" ? { rotate: [0, 140, 20, 140, 0] } : { rotate: 0 }} className="absolute -right-3 top-8 w-5 h-2.5 bg-zinc-800 rounded-full origin-left" />
           <motion.div animate={status === "dragging" ? { rotate: 45 } : {}} className="absolute -left-3 top-8 w-5 h-2.5 bg-zinc-800 rounded-full origin-right" />
@@ -126,6 +126,10 @@ export default function Home() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"main" | "tests" | "calc" | "essay" | "strategy">("main");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Состояния для нового входа
+  const [email, setEmail] = useState("");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // --- ДАННЫЕ ПРОФИЛЯ ---
   const [stats, setStats] = useState({
@@ -162,7 +166,7 @@ export default function Home() {
         setSession(session);
         const fullName = session.user.user_metadata?.full_name || "";
         setUserInfo({
-          firstName: fullName.split(' ')[0] || "",
+          firstName: fullName.split(' ')[0] || "User",
           lastName: fullName.split(' ')[1] || "",
           avatar: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
         });
@@ -179,7 +183,6 @@ export default function Home() {
     window.location.reload();
   };
 
-  // --- УМНАЯ ПРОВЕРКА ПЕРЕД ДЕЙСТВИЕМ ---
   const protectedAction = (action: () => void) => {
     if (!session) {
       setActiveModal("AuthNeeded");
@@ -192,7 +195,6 @@ export default function Home() {
     const textToSend = textOverride || inputValue.trim();
     if (!textToSend || isTyping) return;
 
-    // Чат можно оставить открытым для всех, или тоже защитить:
     if (!session) {
         setActiveModal("AuthNeeded");
         return;
@@ -251,8 +253,6 @@ export default function Home() {
   const deadline = getSmartDeadline();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-orange-600" size={48} /></div>;
-
-  // УДАЛЕНО УСЛОВИЕ !session -> ТЕПЕРЬ САЙТ ОТКРЫТ ВСЕГДА
 
   return (
     <div className="min-h-screen bg-[#F6F6F6] flex overflow-x-hidden font-sans selection:bg-orange-500 selection:text-white">
@@ -446,10 +446,10 @@ export default function Home() {
                         </p>
                         <div className="bg-zinc-50 rounded-3xl p-6 mt-4 border border-zinc-100 group-hover:border-orange-500 group-hover:bg-orange-50/50 transition-all duration-300">
                            <p className="text-[10px] font-black uppercase italic text-zinc-400 mb-2 flex items-center justify-center gap-2">
-                              <Sparkles size={12} className="text-orange-500" /> AI Recommendation
+                             <Sparkles size={12} className="text-orange-500" /> AI Recommendation
                            </p>
                            <p className="text-xs font-bold leading-tight text-zinc-800">
-                              {deadline.isUrgent ? `Срочно! Осталось ${deadline.diffDays}д.` : `Идеальное время для подачи.`}
+                             {deadline.isUrgent ? `Срочно! Осталось ${deadline.diffDays}д.` : `Идеальное время для подачи.`}
                            </p>
                         </div>
                     </motion.div>
@@ -475,23 +475,72 @@ export default function Home() {
         </div>
       </main>
 
-      {/* МОДАЛКА ВХОДА (НОВАЯ) */}
+      {/* МОДАЛКА ВХОДА (ОБНОВЛЕННАЯ: Google + Email Magic Link) */}
       <AnimatePresence>
         {activeModal === "AuthNeeded" && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-xl">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[50px] p-12 text-center relative shadow-2xl">
-              <button onClick={() => setActiveModal(null)} className="absolute top-8 right-8 text-gray-300 hover:text-black"><X size={24}/></button>
-              <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
-                <Lock size={40} />
+            <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }} 
+                animate={{ scale: 1, opacity: 1 }} 
+                exit={{ scale: 0.9, opacity: 0 }} 
+                className="bg-white w-full max-w-md rounded-[50px] p-10 text-center relative shadow-2xl overflow-hidden"
+            >
+              <button onClick={() => setActiveModal(null)} className="absolute top-8 right-8 text-gray-300 hover:text-black transition-colors"><X size={24}/></button>
+              
+              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Lock size={32} />
               </div>
-              <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-4">Initialize Session</h2>
-              <p className="text-gray-500 font-medium mb-10 leading-relaxed">Чтобы сохранить твои результаты и активировать ИИ-аналитику, нужно войти в систему.</p>
-              <button 
-                onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} 
-                className="w-full py-6 bg-black text-white rounded-3xl font-black uppercase italic flex items-center justify-center gap-4 hover:bg-orange-600 transition-all"
-              >
-                Sign in with Google <ArrowRight size={20} />
-              </button>
+              
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter mb-2">Initialize Session</h2>
+              <p className="text-gray-500 text-sm font-medium mb-8">Войди, чтобы ИИ сохранил твою стратегию</p>
+
+              <div className="space-y-4">
+                {/* КНОПКА GOOGLE */}
+                <button 
+                  onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} 
+                  className="w-full py-5 bg-white border-2 border-gray-100 text-black rounded-3xl font-black uppercase italic text-[11px] flex items-center justify-center gap-4 hover:border-orange-500 transition-all shadow-sm"
+                >
+                  <img src="https://www.svgrepo.com/show/355037/google.svg" className="w-4 h-4" alt="G" />
+                  Sign in with Google
+                </button>
+
+                <div className="flex items-center gap-4 my-2">
+                  <div className="h-[1px] bg-gray-100 flex-1"></div>
+                  <span className="text-[10px] font-black text-gray-300 uppercase">или по почте</span>
+                  <div className="h-[1px] bg-gray-100 flex-1"></div>
+                </div>
+
+                {/* ВХОД ПО EMAIL */}
+                <div className="space-y-3">
+                  <input 
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-6 py-5 bg-gray-50 border-2 border-transparent focus:border-orange-500/20 focus:bg-white rounded-3xl outline-none text-sm font-bold transition-all"
+                  />
+                  <button 
+                    disabled={isSendingEmail || !email}
+                    onClick={async () => {
+                      setIsSendingEmail(true);
+                      const { error } = await supabase.auth.signInWithOtp({
+                        email: email,
+                        options: { emailRedirectTo: window.location.origin }
+                      });
+                      setIsSendingEmail(false);
+                      if (error) alert("Ошибка: " + error.message);
+                      else alert("Проверь почту! Мы отправили тебе ссылку для входа.");
+                    }}
+                    className="w-full py-5 bg-black text-white rounded-3xl font-black uppercase italic text-[11px] flex items-center justify-center gap-4 hover:bg-orange-600 disabled:bg-gray-200 transition-all"
+                  >
+                    {isSendingEmail ? <Loader2 className="animate-spin" size={18} /> : <>Get Magic Link <Send size={16} /></>}
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-8 text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                Без паролей. Без спама. <br /> Только твой прогресс.
+              </p>
             </motion.div>
           </div>
         )}
