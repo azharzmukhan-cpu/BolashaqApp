@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   GraduationCap, Send, Loader2, Star, Target, Clock, LogOut, X, Sparkles, 
   CheckCircle2, Zap, User, Settings, Save, Menu, FileText, LayoutDashboard, 
-  Activity, Globe, Camera, ArrowRight, Heart, Bot, Lock, Mail
+  Activity, Globe, Camera, ArrowRight, Heart, Bot, Lock, Mail, BookOpen, MapPin
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -127,7 +127,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"main" | "tests" | "calc" | "essay" | "strategy">("main");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Состояния для нового входа
+  // Состояния для входа
   const [email, setEmail] = useState("");
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
@@ -143,12 +143,9 @@ export default function Home() {
   const [userInfo, setUserInfo] = useState({
     firstName: "",
     lastName: "",
+    grade: "11",
+    targetCountry: "USA",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-  });
-
-  const [userContext, setUserContext] = useState({
-    profile: "Студент",
-    region: "Kazakhstan",
   });
 
   const [messages, setMessages] = useState<Message[]>([
@@ -164,18 +161,23 @@ export default function Home() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setSession(session);
-        const fullName = session.user.user_metadata?.full_name || "";
-        setUserInfo({
-          firstName: fullName.split(' ')[0] || "User",
-          lastName: fullName.split(' ')[1] || "",
-          avatar: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
-        });
+        // Загружаем сохраненные данные из localStorage для этого пользователя
+        const savedProfile = localStorage.getItem(`bolashaq_profile_${session.user.id}`);
+        if (savedProfile) {
+          setUserInfo(JSON.parse(savedProfile));
+        } else {
+          // Если данных нет, берем что есть из Google
+          const fullName = session.user.user_metadata?.full_name || "";
+          setUserInfo(prev => ({
+            ...prev,
+            firstName: fullName.split(' ')[0] || "",
+            lastName: fullName.split(' ')[1] || "",
+            avatar: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
+          }));
+        }
       }
       setIsLoading(false);
     });
-    const savedProfile = localStorage.getItem("ashkomu_pro_dna") || "Студент";
-    const savedRegion = localStorage.getItem("ashkomu_selected_region") || "Kazakhstan";
-    setUserContext({ profile: savedProfile, region: savedRegion });
   }, []);
 
   const handleSignOut = async () => {
@@ -209,7 +211,8 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: messages.map(m => ({ role: m.role, content: m.text })).concat({ role: "user", content: textToSend })
+          messages: messages.map(m => ({ role: m.role, content: m.text })).concat({ role: "user", content: textToSend }),
+          context: userInfo // Передаем данные пользователя в ИИ
         })
       });
       const data = await response.json();
@@ -229,22 +232,22 @@ export default function Home() {
     let label: string;
     let actionPrompt: string;
 
-    if (userContext.profile === "Студент") {
-      deadlineDate = new Date("2026-03-01");
-      label = "Summer School Apps";
-      actionPrompt = "AI, составь список лучших летних школ для моего профиля";
-    } else if (userContext.region === "USA") {
+    if (userInfo.grade === "10") {
+      deadlineDate = new Date("2026-06-01");
+      label = "Summer Internship";
+      actionPrompt = "AI, какие стажировки открыты для 10 класса?";
+    } else if (userInfo.targetCountry === "USA") {
       deadlineDate = new Date("2026-03-15");
       label = "Regular Decision";
       actionPrompt = "AI, проверь готовность моих документов для вузов США";
     } else {
       deadlineDate = new Date("2026-04-01");
-      label = "Final Submission";
-      actionPrompt = "AI, какие дедлайны остались на апрель?";
+      label = "Global Admissions";
+      actionPrompt = "AI, какие дедлайны в Европе на апрель?";
     }
 
     const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const isUrgent = diffDays <= 7;
+    const isUrgent = diffDays <= 14;
     const formattedDate = deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
 
     return { label, formattedDate, isUrgent, diffDays, actionPrompt };
@@ -332,7 +335,7 @@ export default function Home() {
                 {session ? <img src={userInfo.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <User size={20} className="text-gray-400" />}
               </div>
               <span className="text-xs font-black uppercase italic tracking-tighter">
-                {session ? userInfo.firstName : "Guest User"}
+                {session ? (userInfo.firstName || "Profile") : "Guest User"}
               </span>
             </motion.button>
           </div>
@@ -475,7 +478,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* МОДАЛКА ВХОДА (ОБНОВЛЕННАЯ: Google + Email Magic Link) */}
+      {/* МОДАЛКА ВХОДА */}
       <AnimatePresence>
         {activeModal === "AuthNeeded" && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-xl">
@@ -483,94 +486,141 @@ export default function Home() {
                 initial={{ scale: 0.9, opacity: 0 }} 
                 animate={{ scale: 1, opacity: 1 }} 
                 exit={{ scale: 0.9, opacity: 0 }} 
-                className="bg-white w-full max-w-md rounded-[50px] p-10 text-center relative shadow-2xl overflow-hidden"
+                className="bg-white w-full max-w-md rounded-[50px] p-10 text-center relative shadow-2xl"
             >
               <button onClick={() => setActiveModal(null)} className="absolute top-8 right-8 text-gray-300 hover:text-black transition-colors"><X size={24}/></button>
-              
-              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Lock size={32} />
-              </div>
-              
+              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><Lock size={32} /></div>
               <h2 className="text-2xl font-black uppercase italic tracking-tighter mb-2">Initialize Session</h2>
               <p className="text-gray-500 text-sm font-medium mb-8">Войди, чтобы ИИ сохранил твою стратегию</p>
-
               <div className="space-y-4">
-                {/* КНОПКА GOOGLE */}
                 <button 
                   onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} 
                   className="w-full py-5 bg-white border-2 border-gray-100 text-black rounded-3xl font-black uppercase italic text-[11px] flex items-center justify-center gap-4 hover:border-orange-500 transition-all shadow-sm"
                 >
-                  <img src="https://www.svgrepo.com/show/355037/google.svg" className="w-4 h-4" alt="G" />
-                  Sign in with Google
+                  <img src="https://www.svgrepo.com/show/355037/google.svg" className="w-4 h-4" alt="G" /> Sign in with Google
                 </button>
-
                 <div className="flex items-center gap-4 my-2">
                   <div className="h-[1px] bg-gray-100 flex-1"></div>
-                  <span className="text-[10px] font-black text-gray-300 uppercase">или по почте</span>
+                  <span className="text-[10px] font-black text-gray-300 uppercase">или</span>
                   <div className="h-[1px] bg-gray-100 flex-1"></div>
                 </div>
-
-                {/* ВХОД ПО EMAIL */}
                 <div className="space-y-3">
                   <input 
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)}
                     className="w-full px-6 py-5 bg-gray-50 border-2 border-transparent focus:border-orange-500/20 focus:bg-white rounded-3xl outline-none text-sm font-bold transition-all"
                   />
                   <button 
                     disabled={isSendingEmail || !email}
                     onClick={async () => {
                       setIsSendingEmail(true);
-                      const { error } = await supabase.auth.signInWithOtp({
-                        email: email,
-                        options: { emailRedirectTo: window.location.origin }
-                      });
+                      const { error } = await supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin } });
                       setIsSendingEmail(false);
-                      if (error) alert("Ошибка: " + error.message);
-                      else alert("Проверь почту! Мы отправили тебе ссылку для входа.");
+                      if (error) alert(error.message); else alert("Ссылка отправлена на почту!");
                     }}
-                    className="w-full py-5 bg-black text-white rounded-3xl font-black uppercase italic text-[11px] flex items-center justify-center gap-4 hover:bg-orange-600 disabled:bg-gray-200 transition-all"
+                    className="w-full py-5 bg-black text-white rounded-3xl font-black uppercase italic text-[11px] flex items-center justify-center gap-4 hover:bg-orange-600 transition-all"
                   >
                     {isSendingEmail ? <Loader2 className="animate-spin" size={18} /> : <>Get Magic Link <Send size={16} /></>}
                   </button>
                 </div>
               </div>
-
-              <p className="mt-8 text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                Без паролей. Без спама. <br /> Только твой прогресс.
-              </p>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* МОДАЛКА ПРОФИЛЯ */}
+      {/* МОДАЛКА НАСТРОЕК (ОБНОВЛЕННАЯ) */}
       <AnimatePresence>
         {activeModal === "Profile" && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-2xl">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white w-full max-w-2xl rounded-[60px] p-16 relative shadow-[0_50px_100px_rgba(0,0,0,0.2)]">
-              <button onClick={() => setActiveModal(null)} className="absolute top-12 right-12 text-gray-300 hover:text-black transition-colors"><X size={40} strokeWidth={1}/></button>
-              <div className="flex items-center gap-10 mb-16">
-                <div className="w-32 h-32 rounded-[45px] overflow-hidden border-4 border-orange-500 p-1 bg-white shadow-2xl">
-                    <img src={userInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-[38px]" />
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-2xl">
+            <motion.div 
+              initial={{ y: 50, opacity: 0 }} 
+              animate={{ y: 0, opacity: 1 }} 
+              exit={{ y: 50, opacity: 0 }} 
+              className="bg-white w-full max-w-xl rounded-[60px] p-12 relative shadow-2xl overflow-y-auto max-h-[90vh] scrollbar-hide"
+            >
+              <button onClick={() => setActiveModal(null)} className="absolute top-10 right-10 text-gray-300 hover:text-black transition-colors"><X size={32}/></button>
+              
+              <div className="flex items-center gap-8 mb-12">
+                <div className="w-24 h-24 rounded-[35px] overflow-hidden border-4 border-orange-500 p-1 bg-white shadow-xl">
+                    <img src={userInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-[28px]" />
                 </div>
                 <div>
-                  <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Settings</h2>
+                  <h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none">Settings</h2>
+                  <p className="text-gray-400 text-xs font-bold uppercase mt-2 tracking-widest">Personal AI Context</p>
                 </div>
               </div>
-              <button 
-                onClick={async () => {
-                  await supabase.auth.updateUser({ data: { full_name: `${userInfo.firstName} ${userInfo.lastName}` } });
-                  localStorage.setItem("ashkomu_selected_region", userContext.region);
-                  localStorage.setItem("ashkomu_pro_dna", userContext.profile);
-                  setActiveModal(null);
-                }} 
-                className="w-full py-8 bg-orange-600 text-white rounded-[35px] font-black uppercase italic tracking-widest flex items-center justify-center gap-4 hover:bg-black transition-all shadow-xl shadow-orange-200"
-              >
-                <Save size={24}/> Sync Changes
-              </button>
+
+              <div className="space-y-8">
+                {/* ИМЯ И ФАМИЛИЯ */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-4">Имя</label>
+                    <div className="relative">
+                      <User className="absolute left-6 top-1/2 -translate-y-1/2 text-orange-500" size={18} />
+                      <input 
+                        value={userInfo.firstName} 
+                        onChange={(e) => setUserInfo({...userInfo, firstName: e.target.value})}
+                        className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent focus:border-orange-500/20 rounded-3xl outline-none font-bold text-sm transition-all"
+                        placeholder="Алексей"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-4">Фамилия</label>
+                    <input 
+                      value={userInfo.lastName} 
+                      onChange={(e) => setUserInfo({...userInfo, lastName: e.target.value})}
+                      className="w-full px-8 py-5 bg-gray-50 border-2 border-transparent focus:border-orange-500/20 rounded-3xl outline-none font-bold text-sm transition-all"
+                      placeholder="Иванов"
+                    />
+                  </div>
+                </div>
+
+                {/* КЛАСС / ГОД ОБУЧЕНИЯ */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-4">Класс / Год обучения</label>
+                  <div className="relative">
+                    <BookOpen className="absolute left-6 top-1/2 -translate-y-1/2 text-orange-500" size={18} />
+                    <select 
+                      value={userInfo.grade} 
+                      onChange={(e) => setUserInfo({...userInfo, grade: e.target.value})}
+                      className="w-full pl-14 pr-8 py-5 bg-gray-50 border-2 border-transparent focus:border-orange-500/20 rounded-3xl outline-none font-bold text-sm appearance-none cursor-pointer transition-all"
+                    >
+                      <option value="9">9 Класс</option>
+                      <option value="10">10 Класс</option>
+                      <option value="11">11 Класс</option>
+                      <option value="12">12 Класс / Gap Year</option>
+                      <option value="student">Студент ВУЗа</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* ЦЕЛЕВАЯ СТРАНА */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-4">Целевая страна</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-orange-500" size={18} />
+                    <input 
+                      value={userInfo.targetCountry} 
+                      onChange={(e) => setUserInfo({...userInfo, targetCountry: e.target.value})}
+                      className="w-full pl-14 pr-6 py-5 bg-gray-50 border-2 border-transparent focus:border-orange-500/20 rounded-3xl outline-none font-bold text-sm transition-all"
+                      placeholder="Напр: США, Германия, Корея..."
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    if (session) {
+                      localStorage.setItem(`bolashaq_profile_${session.user.id}`, JSON.stringify(userInfo));
+                      setActiveModal(null);
+                    }
+                  }} 
+                  className="w-full py-6 bg-orange-600 text-white rounded-3xl font-black uppercase italic tracking-widest flex items-center justify-center gap-4 hover:bg-black transition-all shadow-xl shadow-orange-100"
+                >
+                  <Save size={20}/> Save Settings
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
