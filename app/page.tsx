@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   GraduationCap, Send, Loader2, Star, Target, Clock, LogOut, X, Sparkles, 
   CheckCircle2, Zap, User, Settings, Save, Menu, FileText, LayoutDashboard, 
-  Activity, Globe, Camera, ArrowRight, Heart, Bot
+  Activity, Globe, Camera, ArrowRight, Heart, Bot, Lock
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -127,7 +127,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"main" | "tests" | "calc" | "essay" | "strategy">("main");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // --- ДОБАВЛЕННЫЙ СТЕЙТ ДЛЯ СТАТИСТИКИ (DNA) ---
+  // --- ДАННЫЕ ПРОФИЛЯ ---
   const [stats, setStats] = useState({
     gpa: "4.8", 
     ielts: "7.5", 
@@ -179,9 +179,24 @@ export default function Home() {
     window.location.reload();
   };
 
+  // --- УМНАЯ ПРОВЕРКА ПЕРЕД ДЕЙСТВИЕМ ---
+  const protectedAction = (action: () => void) => {
+    if (!session) {
+      setActiveModal("AuthNeeded");
+    } else {
+      action();
+    }
+  };
+
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputValue.trim();
     if (!textToSend || isTyping) return;
+
+    // Чат можно оставить открытым для всех, или тоже защитить:
+    if (!session) {
+        setActiveModal("AuthNeeded");
+        return;
+    }
     
     setMessages(prev => [...prev, { role: "user", text: textToSend }]);
     setInputValue("");
@@ -237,30 +252,12 @@ export default function Home() {
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-orange-600" size={48} /></div>;
 
-  if (!session) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-6 relative overflow-hidden">
-      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-100 rounded-full blur-[120px] opacity-50" />
-      <div className="text-center relative z-10">
-        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="inline-block p-10 bg-black rounded-[50px] shadow-[0_40px_80px_rgba(0,0,0,0.15)] mb-12">
-          <GraduationCap size={80} className="text-orange-500" strokeWidth={1.5} />
-        </motion.div>
-        <h1 className="text-7xl md:text-8xl font-black uppercase italic tracking-tighter leading-none mb-6">BOLASHAQ <span className="text-orange-600">AI</span></h1>
-        <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-[10px] mb-12">Next Gen Education Intelligence</p>
-        <motion.button 
-          whileHover={{ scale: 1.05, backgroundColor: "#EA580C" }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} 
-          className="py-6 px-14 bg-black text-white rounded-[35px] font-black uppercase italic shadow-2xl flex items-center gap-4 text-xl tracking-tighter transition-all"
-        >
-          Initialize Workspace <ArrowRight size={28} />
-        </motion.button>
-      </div>
-    </div>
-  );
+  // УДАЛЕНО УСЛОВИЕ !session -> ТЕПЕРЬ САЙТ ОТКРЫТ ВСЕГДА
 
   return (
     <div className="min-h-screen bg-[#F6F6F6] flex overflow-x-hidden font-sans selection:bg-orange-500 selection:text-white">
       
+      {/* SIDEBAR */}
       <motion.aside 
         animate={{ width: isSidebarOpen ? 280 : 90 }}
         className="fixed left-0 top-0 h-full bg-[#0A0A0A] text-white z-50 flex flex-col border-r border-white/5 shadow-2xl transition-all"
@@ -286,11 +283,15 @@ export default function Home() {
           ].map((item) => (
             <button 
               key={item.id}
-              onClick={() => setActiveTab(item.id as any)} 
+              onClick={() => {
+                if (item.id === 'main') setActiveTab('main');
+                else protectedAction(() => setActiveTab(item.id as any));
+              }} 
               className={`w-full flex items-center gap-5 p-4 rounded-[22px] transition-all group ${activeTab === item.id ? 'bg-orange-600 text-white shadow-xl shadow-orange-900/20' : 'hover:bg-white/5 text-gray-500 hover:text-white'}`}
             >
               <div className={`${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform`}>{item.icon}</div>
               {isSidebarOpen && <span className="text-[11px] font-black uppercase tracking-[0.2em]">{item.label}</span>}
+              {!session && item.id !== 'main' && isSidebarOpen && <Lock size={12} className="ml-auto opacity-30" />}
             </button>
           ))}
         </nav>
@@ -299,10 +300,17 @@ export default function Home() {
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-full flex justify-center p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors mb-4">
             <Menu size={20} />
           </button>
-          <button onClick={handleSignOut} className="w-full flex items-center gap-5 p-4 text-red-500 hover:bg-red-500/10 rounded-2xl transition-all mb-4">
-            <LogOut size={22}/>
-            {isSidebarOpen && <span className="text-[11px] font-black uppercase tracking-widest">Logout</span>}
-          </button>
+          {session ? (
+            <button onClick={handleSignOut} className="w-full flex items-center gap-5 p-4 text-red-500 hover:bg-red-500/10 rounded-2xl transition-all mb-4">
+                <LogOut size={22}/>
+                {isSidebarOpen && <span className="text-[11px] font-black uppercase tracking-widest">Logout</span>}
+            </button>
+          ) : (
+            <button onClick={() => setActiveModal("AuthNeeded")} className="w-full flex items-center gap-5 p-4 text-orange-500 hover:bg-orange-500/10 rounded-2xl transition-all mb-4">
+                <User size={22}/>
+                {isSidebarOpen && <span className="text-[11px] font-black uppercase tracking-widest">Login</span>}
+            </button>
+          )}
         </div>
       </motion.aside>
 
@@ -317,13 +325,15 @@ export default function Home() {
             
             <motion.button 
               whileHover={{ y: -3 }}
-              onClick={() => setActiveModal("Profile")} 
+              onClick={() => protectedAction(() => setActiveModal("Profile"))} 
               className="flex items-center gap-4 bg-white border border-gray-200 p-2 pr-6 rounded-[22px] hover:shadow-xl transition-all"
             >
-              <div className="w-10 h-10 rounded-[16px] overflow-hidden">
-                <img src={userInfo.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              <div className="w-10 h-10 rounded-[16px] overflow-hidden bg-gray-100 flex items-center justify-center">
+                {session ? <img src={userInfo.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <User size={20} className="text-gray-400" />}
               </div>
-              <span className="text-xs font-black uppercase italic tracking-tighter">{userInfo.firstName || "Profile"}</span>
+              <span className="text-xs font-black uppercase italic tracking-tighter">
+                {session ? userInfo.firstName : "Guest User"}
+              </span>
             </motion.button>
           </div>
         </header>
@@ -347,7 +357,7 @@ export default function Home() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                       <motion.button 
                         whileHover={{ y: -8 }}
-                        onClick={() => setActiveTab("strategy")} 
+                        onClick={() => protectedAction(() => setActiveTab("strategy"))} 
                         className="group bg-white p-12 rounded-[55px] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] hover:border-orange-500/30 transition-all text-left relative overflow-hidden"
                       >
                         <Target className="text-orange-600 mb-8 group-hover:rotate-12 transition-transform" size={48} strokeWidth={1.5} />
@@ -357,7 +367,7 @@ export default function Home() {
 
                       <motion.button 
                         whileHover={{ y: -8 }}
-                        onClick={() => setActiveTab("tests")} 
+                        onClick={() => protectedAction(() => setActiveTab("tests"))} 
                         className="group bg-[#0A0A0A] p-12 rounded-[55px] shadow-[0_30px_60px_rgba(0,0,0,0.1)] hover:bg-orange-600 transition-all text-left relative overflow-hidden"
                       >
                         <Activity className="text-orange-500 mb-8 group-hover:scale-110 transition-transform" size={48} strokeWidth={1.5} />
@@ -366,7 +376,6 @@ export default function Home() {
                       </motion.button>
                     </div>
 
-                    {/* AI CHAT SECTION IS HERE */}
                     <div id="ai-chat-section" className="bg-white border border-gray-100 shadow-[0_40px_80px_rgba(0,0,0,0.04)] rounded-[60px] h-[650px] flex flex-col overflow-hidden">
                       <div className="flex-1 overflow-y-auto p-12 space-y-8 scrollbar-hide">
                         {messages.map((m, i) => (
@@ -450,30 +459,43 @@ export default function Home() {
             )}
 
             {activeTab === "tests" && <motion.div key="tests" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><TestsCenter /></motion.div>}
-            
-            {/* ВКЛАДКА STRATEGY: Передаем stats и функцию переключения */}
             {activeTab === "strategy" && (
               <motion.div key="strategy" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <MainStrategy 
-                  stats={stats} 
-                  setStats={setStats} 
-                  onBuild={() => setActiveTab("calc")} 
-                />
+                <MainStrategy stats={stats} setStats={setStats} onBuild={() => setActiveTab("calc")} />
               </motion.div>
             )}
-            
-            {/* ВКЛАДКА CALC: Передаем актуальные stats */}
             {activeTab === "calc" && (
               <motion.div key="calc" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <AdmissionCalculator externalProfile={stats} />
               </motion.div>
             )}
-
             {activeTab === "essay" && <motion.div key="essay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><EssayPolisher /></motion.div>}
 
           </AnimatePresence>
         </div>
       </main>
+
+      {/* МОДАЛКА ВХОДА (НОВАЯ) */}
+      <AnimatePresence>
+        {activeModal === "AuthNeeded" && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-xl">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[50px] p-12 text-center relative shadow-2xl">
+              <button onClick={() => setActiveModal(null)} className="absolute top-8 right-8 text-gray-300 hover:text-black"><X size={24}/></button>
+              <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
+                <Lock size={40} />
+              </div>
+              <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-4">Initialize Session</h2>
+              <p className="text-gray-500 font-medium mb-10 leading-relaxed">Чтобы сохранить твои результаты и активировать ИИ-аналитику, нужно войти в систему.</p>
+              <button 
+                onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} 
+                className="w-full py-6 bg-black text-white rounded-3xl font-black uppercase italic flex items-center justify-center gap-4 hover:bg-orange-600 transition-all"
+              >
+                Sign in with Google <ArrowRight size={20} />
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* МОДАЛКА ПРОФИЛЯ */}
       <AnimatePresence>
